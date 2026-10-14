@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>공 개수 정리판</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: 한 열 작업대 — 설정 줄, 입력 줄, 합계 줄, 목록 박스 순서 */
+:root{
+  --bg:#eef1f4; --panel:#ffffff; --fg:#1d2430; --muted:#5f6b7a; --line:#d5dbe3;
+  --accent:#2f6fd6; --accent-ink:#ffffff; --ball:#e8b73a; --danger:#c43d3d; --soft:#e6edf8;
+  --f-display:"Gowun Dodum","IBM Plex Sans KR",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161c; --panel:#1b2129; --fg:#e7ebf0; --muted:#94a0ae; --line:#2e3742;
+  --accent:#6a9cf0; --accent-ink:#0d1420; --ball:#f0c552; --danger:#ec6f6f; --soft:#1f2a3a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161c; --panel:#1b2129; --fg:#e7ebf0; --muted:#94a0ae; --line:#2e3742;
+  --accent:#6a9cf0; --accent-ink:#0d1420; --ball:#f0c552; --danger:#ec6f6f; --soft:#1f2a3a; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 40px}
+.wrap{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1{font-family:var(--f-display);font-size:1.7rem;margin:0;text-wrap:balance;display:flex;align-items:center;gap:10px}
+h1 .dot{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff8 0 20%,transparent 22%),var(--ball);flex:none}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
+label{font-size:.78rem;font-weight:600;color:var(--muted);letter-spacing:.04em}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+input{font:inherit;font-size:1rem;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;width:100%;box-sizing:border-box}
+input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.price-row{display:flex;align-items:center;gap:10px}
+.price-row input{max-width:200px;text-align:right}
+.price-row span{color:var(--muted)}
+.add{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+.add input#money{text-align:right}
+button{font:inherit;font-weight:600;border-radius:8px;border:1px solid transparent;padding:10px 16px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.primary{background:var(--accent);color:var(--accent-ink)}
+.ghost{background:transparent;border-color:var(--line);color:var(--fg)}
+.ghost.warn{color:var(--danger)}
+.preview{font-size:.85rem;color:var(--muted);min-height:1.3em}
+.preview b{color:var(--fg)}
+.msg{font-size:.85rem;color:var(--danger)}
+.totals{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tot{background:var(--soft);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.tot .v{font-family:var(--f-num);font-size:1.6rem;font-weight:600;font-variant-numeric:tabular-nums}
+.tot .k{font-size:.78rem;color:var(--muted);font-weight:600;letter-spacing:.04em}
+.box{border:2px solid var(--fg);border-radius:10px;padding:6px 0;background:var(--panel);min-height:120px}
+.box-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.box-head h2{font-size:1rem;margin:0}
+.box-head .acts{display:flex;gap:8px;flex-wrap:wrap}
+.box-head button{padding:6px 12px;font-size:.85rem}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--line)}
+li:last-child{border-bottom:0}
+li .nm{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:600}
+li .bc{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-weight:600;font-size:1.05rem}
+li .sub{font-size:.78rem;color:var(--muted);font-family:var(--f-num)}
+li .x{background:none;border:0;color:var(--muted);padding:4px 8px;font-size:1rem}
+li .x:hover{color:var(--danger)}
+.empty{padding:28px 14px;text-align:center;color:var(--muted)}
+.line{padding:12px 16px;font-size:1.1rem;font-weight:600;line-height:1.8;overflow-wrap:anywhere;user-select:text}
+.line .b{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.edit-list{border:1px solid var(--line);border-radius:10px}
+.note{font-size:.8rem;color:var(--muted)}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.85rem}
+@media (max-width:480px){.add{grid-template-columns:1fr 1fr}.add button{grid-column:1/-1}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <h1><span class="dot" aria-hidden="true"></span>공 개수 정리판</h1>
+
+  <section class="panel">
+    <div class="field">
+      <label for="price">공 1개당 가격</label>
+      <div class="price-row"><input id="price" class="num" inputmode="numeric" autocomplete="off" value="1,000"><span>원</span></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <form id="addForm" class="add" autocomplete="off">
+      <div class="field"><label for="nick">닉네임</label><input id="nick" placeholder="닉네임"></div>
+      <div class="field"><label for="money">받은 돈 (원)</label><input id="money" class="num" inputmode="numeric" placeholder="0"></div>
+      <button type="submit" class="primary">추가</button>
+    </form>
+    <div class="preview" id="preview"></div>
+    <div class="msg" id="msg" hidden></div>
+    <p class="note">같은 닉네임을 다시 입력하면 금액이 합쳐져요. Enter로도 추가됩니다.</p>
+  </section>
+
+  <section class="totals">
+    <div class="tot"><span class="k">현재까지 공 개수</span><span class="v" id="totBalls">0</span></div>
+    <div class="tot"><span class="k">받은 돈 합계</span><span class="v" id="totMoney">0원</span></div>
+  </section>
+
+  <section class="panel" style="gap:10px">
+    <div class="box-head">
+      <h2>닉네임 / 공 개수</h2>
+      <div class="acts">
+        <button type="button" class="ghost" id="copyBtn">목록 복사</button>
+        <button type="button" class="ghost" id="editBtn">수정/삭제</button>
+        <button type="button" class="ghost warn" id="resetBtn">전체 초기화</button>
+      </div>
+    </div>
+    <div class="confirm" id="confirm" hidden>
+      <span>목록을 모두 지울까요?</span>
+      <button type="button" class="ghost warn" id="yesReset">지우기</button>
+      <button type="button" class="ghost" id="noReset">취소</button>
+    </div>
+    <div class="box"><div class="line" id="line"></div><div class="empty" id="empty" hidden>아직 기록이 없어요. 위에서 닉네임과 받은 돈을 입력하세요.</div></div>
+    <div class="edit-list" id="editWrap" hidden><ul id="list"></ul></div>
+    <p class="note" id="sampleNote" hidden>지금 보이는 3줄은 예시입니다. "전체 초기화"로 지우고 시작하세요.</p>
+    <p class="note">기록은 이 브라우저에만 저장돼요.</p>
+  </section>
+</div>
+
+<script>
+(function(){
+  const KEY='ballCounter.v1';
+  const $=id=>document.getElementById(id);
+  const fmt=n=>Number(n||0).toLocaleString('ko-KR');
+  const parse=s=>{const d=String(s).replace(/[^\d]/g,'');return d?parseInt(d,10):0};
+
+  let state={price:1000,rows:[],sample:true};
+  try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.rows))state=s;}catch(e){}
+  if(state.sample&&state.rows.length===0){
+    state.rows=[{nick:'예시_곰돌이',money:5000},{nick:'예시_은하수',money:12000},{nick:'예시_달빛',money:3500}];
+  }
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
+
+  const price=$('price'),nick=$('nick'),money=$('money');
+  price.value=fmt(state.price);
+
+  function commaInput(el){
+    el.addEventListener('input',()=>{
+      const n=parse(el.value);
+      el.value=el.value.trim()===''?'':fmt(n);
+      el.setSelectionRange(el.value.length,el.value.length);
+    });
+  }
+  commaInput(price);commaInput(money);
+
+  const balls=m=>state.price>0?Math.floor(m/state.price):0;
+
+  function render(){
+    const list=$('list');list.innerHTML='';
+    let tb=0,tm=0;
+    state.rows.forEach((r,i)=>{
+      const b=balls(r.money);tb+=b;tm+=r.money;
+      const rem=state.price>0?r.money%state.price:0;
+      const li=document.createElement('li');
+      li.innerHTML='<span class="nm"></span><span class="sub"></span><span class="bc"></span><button class="x" aria-label="삭제" title="삭제">✕</button>';
+      li.querySelector('.nm').textContent=r.nick;
+      li.querySelector('.bc').textContent=fmt(b);
+      li.querySelector('.sub').textContent=fmt(r.money)+'원'+(rem?' (남음 '+fmt(rem)+')':'');
+      li.querySelector('.x').onclick=()=>{state.rows.splice(i,1);save();render();};
+      list.appendChild(li);
+    });
+    const line=$('line');line.innerHTML='';
+    state.rows.forEach((r,i)=>{
+      if(i)line.appendChild(document.createTextNode(', '));
+      const s=document.createElement('span');
+      s.textContent=r.nick+'/';
+      const b=document.createElement('span');b.className='b';b.textContent=balls(r.money);
+      s.appendChild(b);line.appendChild(s);
+    });
+    line.hidden=state.rows.length===0;
+    $('empty').hidden=state.rows.length>0;
+    $('sampleNote').hidden=!(state.sample&&state.rows.some(r=>r.nick.startsWith('예시_')));
+    $('totBalls').textContent=fmt(tb);
+    $('totMoney').textContent=fmt(tm)+'원';
+    updatePreview();
+  }
+
+  function updatePreview(){
+    const m=parse(money.value),p=$('preview');
+    if(!m||!state.price){p.textContent='';return;}
+    p.innerHTML='→ 공 <b class="num">'+fmt(balls(m))+'</b>개'+(m%state.price?' · 남는 금액 '+fmt(m%state.price)+'원':'');
+  }
+
+  price.addEventListener('input',()=>{state.price=parse(price.value);save();render();});
+  money.addEventListener('input',updatePreview);
+
+  $('addForm').addEventListener('submit',e=>{
+    e.preventDefault();
+    const msg=$('msg');msg.hidden=true;
+    const n=nick.value.trim(),m=parse(money.value);
+    if(!state.price){msg.textContent='공 1개당 가격을 먼저 입력하세요.';msg.hidden=false;return;}
+    if(!n){msg.textContent='닉네임을 입력하세요.';msg.hidden=false;nick.focus();return;}
+    if(!m){msg.textContent='받은 돈을 입력하세요.';msg.hidden=false;money.focus();return;}
+    if(state.sample){state.rows=state.rows.filter(r=>!r.nick.startsWith('예시_'));state.sample=false;}
+    const ex=state.rows.find(r=>r.nick===n);
+    if(ex)ex.money+=m;else state.rows.push({nick:n,money:m});
+    nick.value='';money.value='';nick.focus();
+    save();render();
+  });
+
+  $('editBtn').onclick=()=>{const w=$('editWrap');w.hidden=!w.hidden;$('editBtn').textContent=w.hidden?'수정/삭제':'닫기';};
+  $('resetBtn').onclick=()=>{$('confirm').hidden=false;};
+  $('noReset').onclick=()=>{$('confirm').hidden=true;};
+  $('yesReset').onclick=()=>{state.rows=[];state.sample=false;save();render();$('confirm').hidden=true;};
+
+  $('copyBtn').onclick=async()=>{
+    const txt=state.rows.map(r=>r.nick+'/'+balls(r.money)).join(', ');
+    const btn=$('copyBtn');
+    try{await navigator.clipboard.writeText(txt);btn.textContent='복사됨';}
+    catch(e){btn.textContent='복사 실패';}
+    setTimeout(()=>btn.textContent='목록 복사',1500);
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
