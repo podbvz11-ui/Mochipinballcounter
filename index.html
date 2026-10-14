@@ -38,6 +38,10 @@ input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:1px;bo
 .price-row span{color:var(--muted)}
 .add{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
 .add input#money{text-align:right}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--f-num);font-size:.85rem;padding:6px 12px;border-radius:999px;background:var(--soft);color:var(--fg);border:1px solid var(--line)}
+.chip:hover{border-color:var(--accent)}
+.chip.clear{background:transparent;color:var(--muted);font-family:var(--f-body)}
 button{font:inherit;font-weight:600;border-radius:8px;border:1px solid transparent;padding:10px 16px;cursor:pointer}
 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .primary{background:var(--accent);color:var(--accent-ink)}
@@ -103,9 +107,17 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   <section class="panel">
     <form id="addForm" class="add" autocomplete="off">
       <div class="field"><label for="nick">닉네임</label><input id="nick" lang="ko" placeholder="닉네임"></div>
-      <div class="field"><label for="money">받은 돈 (원)</label><input id="money" class="num" lang="ko" placeholder="0"></div>
+      <div class="field"><label for="money">받은 돈 (원)</label><input id="money" lang="ko" placeholder="예: 500만"></div>
       <button type="submit" class="primary">추가</button>
     </form>
+    <div class="chips" aria-label="금액 빠르게 더하기">
+      <button type="button" class="chip" data-add="1000000">+100만</button>
+      <button type="button" class="chip" data-add="5000000">+500만</button>
+      <button type="button" class="chip" data-add="10000000">+1000만</button>
+      <button type="button" class="chip" data-add="100000000">+1억</button>
+      <button type="button" class="chip" id="chipBall">+공 1개</button>
+      <button type="button" class="chip clear" id="chipClear">지우기</button>
+    </div>
     <div class="preview" id="preview"></div>
     <div class="msg" id="msg" hidden></div>
     <p class="note">같은 닉네임을 다시 입력하면 공 개수가 합쳐져요. Enter로도 추가됩니다.</p>
@@ -208,7 +220,37 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
       el.setSelectionRange(el.value.length,el.value.length);
     });
   }
-  commaInput(price);commaInput(money);
+  commaInput(price);
+
+  // 받은 돈: 숫자, 쉼표, 한글 단위(만·억·천·백·십), 한글 숫자(오백만 등) 모두 허용
+  function parseAmount(s){
+    s=String(s).replace(/골드|원|gold/gi,'').replace(/[\s,_]/g,'');
+    if(!s)return 0;
+    if(/^\d+$/.test(s))return parseInt(s,10);
+    const dig={영:0,공:0,일:1,이:2,삼:3,사:4,오:5,육:6,칠:7,팔:8,구:9};
+    const small={십:10,백:100,천:1000},big={만:1e4,억:1e8,조:1e12};
+    let total=0,section=0,cur=null,i=0;
+    while(i<s.length){
+      const m=s.slice(i).match(/^\d+(\.\d+)?/);
+      if(m){cur=parseFloat(m[0]);i+=m[0].length;continue;}
+      const c=s[i++];
+      if(c in dig)cur=dig[c];
+      else if(c in small){section+=(cur===null?1:cur)*small[c];cur=null;}
+      else if(c in big){section+=(cur===null?0:cur);if(!section)section=1;total+=section*big[c];section=0;cur=null;}
+      else return NaN;
+    }
+    return Math.round(total+section+(cur===null?0:cur));
+  }
+
+  document.querySelectorAll('.chip[data-add]').forEach(b=>b.onclick=()=>{
+    const cur=parseAmount(money.value)||0;
+    money.value=fmt(cur+Number(b.dataset.add));updatePreview();
+  });
+  $('chipBall').onclick=()=>{
+    const cur=parseAmount(money.value)||0;
+    money.value=fmt(cur+state.price);updatePreview();
+  };
+  $('chipClear').onclick=()=>{money.value='';updatePreview();money.focus();};
 
   function updateTotals(){
     const {items,bad}=parseBox(box.value);
@@ -221,9 +263,10 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   }
 
   function updatePreview(){
-    const m=parseNum(money.value),p=$('preview');
+    const m=parseAmount(money.value),p=$('preview');
+    if(Number.isNaN(m)){p.textContent='금액을 알아볼 수 없어요. 예: 5000000, 500만, 1억 2000만';return;}
     if(!m||!state.price){p.textContent='';return;}
-    p.innerHTML='→ 공 <b class="num">'+fmt(Math.floor(m/state.price))+'</b>개'+(m%state.price?' · 남는 금액 '+fmt(m%state.price)+'원':'');
+    p.innerHTML='= <b class="num">'+fmt(m)+'</b>원 → 공 <b class="num">'+fmt(Math.floor(m/state.price))+'</b>개'+(m%state.price?' · 남는 금액 '+fmt(m%state.price)+'원':'');
   }
 
   // 공 1개당 가격: 완료 버튼(또는 Enter)을 눌러야 적용
@@ -295,9 +338,10 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   $('addForm').addEventListener('submit',e=>{
     e.preventDefault();
     const msg=$('msg');msg.hidden=true;
-    const n=nick.value.trim().replace(/[,，\n]/g,' '),m=parseNum(money.value);
+    const n=nick.value.trim().replace(/[,，\n]/g,' '),m=parseAmount(money.value);
     if(!state.price){msg.textContent='공 1개당 가격을 먼저 입력하세요.';msg.hidden=false;return;}
     if(!n){msg.textContent='닉네임을 입력하세요.';msg.hidden=false;nick.focus();return;}
+    if(Number.isNaN(m)){msg.textContent='금액을 알아볼 수 없어요. 예: 5000000, 500만, 1억 2000만';msg.hidden=false;money.focus();return;}
     if(!m){msg.textContent='받은 돈을 입력하세요.';msg.hidden=false;money.focus();return;}
     const add=Math.floor(m/state.price);
     if(!add){msg.textContent='받은 돈이 공 1개 가격보다 적어요.';msg.hidden=false;return;}
