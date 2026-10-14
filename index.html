@@ -60,6 +60,22 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .note{font-size:.8rem;color:var(--muted);margin:0}
 .warnline{font-size:.82rem;color:var(--danger);margin:0}
 [hidden]{display:none!important}
+.price-row button{padding:9px 16px}
+.price-row input.pending{outline:2px dashed var(--ball);outline-offset:1px}
+.rem{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:10px}
+.rem:empty{display:none}
+.rem li{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;padding:9px 14px;border-bottom:1px solid var(--line)}
+.rem li:last-child{border-bottom:0}
+.rem .nm{font-weight:600;flex:1;min-width:8em;overflow-wrap:anywhere}
+.rem .amt{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:.92rem}
+.rem .need{color:var(--accent)}
+.modal{position:fixed;inset:0;background:rgba(10,14,20,.55);display:flex;align-items:center;justify-content:center;z-index:10;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.modal-card{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:12px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.modal-card h3{margin:0;font-size:1.1rem}
+.modal-card p{margin:0;color:var(--muted);line-height:1.6}
+.modal-card p b{color:var(--fg)}
+.modal-acts{display:flex;gap:8px;justify-content:flex-end}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.9rem;font-weight:600;
   background:var(--soft);border:1px solid var(--danger);border-radius:8px;padding:8px 12px}
 @media (max-width:480px){.add{grid-template-columns:1fr 1fr}.add button{grid-column:1/-1}}
@@ -76,8 +92,12 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   <section class="panel">
     <div class="field">
       <label for="price">공 1개당 가격</label>
-      <div class="price-row"><input id="price" class="num" lang="ko" autocomplete="off" value="1,000"><span>원</span></div>
+      <form id="priceForm" class="price-row" autocomplete="off">
+        <input id="price" class="num" lang="ko" value="1,000"><span>원</span>
+        <button type="submit" class="primary" id="priceBtn">완료</button>
+      </form>
     </div>
+    <p class="note" id="priceState"></p>
   </section>
 
   <section class="panel">
@@ -114,6 +134,26 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     <p class="note">박스 안 글자를 직접 지우거나 고쳐 쓸 수 있어요. <b>닉네임/숫자</b>를 쉼표로 구분하면 합계에 바로 반영돼요. 받은 돈 합계는 공 개수 × 공 1개당 가격이에요.</p>
     <p class="note">기록은 이 브라우저에만 저장돼요.</p>
   </section>
+
+  <section class="panel" style="gap:10px">
+    <div class="box-head">
+      <h2>남은 돈 (공 1개 미만)</h2>
+      <div class="acts"><button type="button" class="ghost" id="clearRem">남은 돈 목록 비우기</button></div>
+    </div>
+    <ul class="rem" id="remList"></ul>
+    <p class="note" id="remEmpty">공 1개당 가격을 바꿔 목록을 다시 계산했을 때 나누어떨어지지 않고 남는 돈이 여기에 표시돼요.</p>
+  </section>
+</div>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-card">
+    <h3 id="modalTitle">공 개수를 다시 계산할까요?</h3>
+    <p id="modalText"></p>
+    <div class="modal-acts">
+      <button type="button" class="primary" id="modalYes">예</button>
+      <button type="button" class="ghost" id="modalNo">아니요</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -136,6 +176,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
       }
     }
   }catch(e){}
+  if(!state.rems||typeof state.rems!=='object')state.rems={};
   function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
 
   // "닉네임/숫자" 항목을 쉼표·줄바꿈으로 나눠 읽기. 닉네임에 /가 있어도 마지막 / 기준.
@@ -185,9 +226,71 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     p.innerHTML='→ 공 <b class="num">'+fmt(Math.floor(m/state.price))+'</b>개'+(m%state.price?' · 남는 금액 '+fmt(m%state.price)+'원':'');
   }
 
-  price.addEventListener('input',()=>{state.price=parseNum(price.value);save();updateTotals();updatePreview();});
+  // 공 1개당 가격: 완료 버튼(또는 Enter)을 눌러야 적용
+  function showPriceState(){
+    const typed=parseNum(price.value),pending=typed!==state.price;
+    price.classList.toggle('pending',pending);
+    $('priceState').textContent='현재 적용 중: '+fmt(state.price)+'원'+(pending?' · 완료를 눌러야 바뀐 가격이 적용돼요':'');
+  }
+  price.addEventListener('input',showPriceState);
+
+  let pendingPrice=0;
+  $('priceForm').addEventListener('submit',e=>{
+    e.preventDefault();
+    const np=parseNum(price.value);
+    if(!np){price.value=fmt(state.price);showPriceState();return;}
+    if(np===state.price){showPriceState();return;}
+    const {items}=parseBox(box.value);
+    if(!items.length){setPrice(np);return;}
+    pendingPrice=np;
+    $('modalText').innerHTML='공 1개당 가격이 <b>'+fmt(state.price)+'원</b>에서 <b>'+fmt(np)+'원</b>으로 바뀌어요.<br>'+
+      '목록에 있는 공 개수를 바뀐 가격에 맞게 다시 계산할까요?<br>'+
+      '<span style="font-size:.85em">아니요를 누르면 가격만 바뀌고 목록은 그대로예요.</span>';
+    $('modal').hidden=false;$('modalYes').focus();
+  });
+
+  function setPrice(np){state.price=np;price.value=fmt(np);save();showPriceState();updateTotals();updatePreview();renderRems();}
+
+  $('modalNo').onclick=()=>{$('modal').hidden=true;setPrice(pendingPrice);};
+  $('modalYes').onclick=()=>{
+    $('modal').hidden=true;
+    const oldP=state.price,np=pendingPrice;
+    const {items,bad}=parseBox(box.value);
+    const rems={};
+    items.forEach(r=>{
+      const total=r.balls*oldP+(state.rems[r.nick]||0);
+      r.balls=Math.floor(total/np);
+      const left=total%np;
+      if(left)rems[r.nick]=left;
+    });
+    state.rems=rems;
+    box.value=toText(items)+(bad.length?', '+bad.join(', '):'');
+    state.text=box.value;
+    setPrice(np);
+  };
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('modal').hidden)$('modal').hidden=true;});
+
+  // 남은 돈 목록: 닉네임 - 남은 돈 - 공 1개 더 받으려면 필요한 돈
+  function renderRems(){
+    const list=$('remList');list.innerHTML='';
+    const names=new Set(parseBox(box.value).items.map(r=>r.nick));
+    Object.keys(state.rems).forEach(n=>{
+      const left=state.rems[n];
+      if(!left||!names.has(n))return;
+      const li=document.createElement('li');
+      const need=state.price-left;
+      li.innerHTML='<span class="nm"></span><span class="amt"></span><span class="amt need"></span>';
+      li.querySelector('.nm').textContent=n;
+      li.querySelector('.amt').textContent='남은 돈 '+fmt(left)+'원';
+      li.querySelector('.need').textContent=need>0?'공 1개 추가까지 '+fmt(need)+'원':'공 1개 추가 가능';
+      list.appendChild(li);
+    });
+    $('remEmpty').hidden=list.children.length>0;
+  }
+  $('clearRem').onclick=()=>{state.rems={};save();renderRems();};
+
   money.addEventListener('input',updatePreview);
-  box.addEventListener('input',()=>{state.text=box.value;save();updateTotals();});
+  box.addEventListener('input',()=>{state.text=box.value;save();updateTotals();renderRems();});
 
   $('addForm').addEventListener('submit',e=>{
     e.preventDefault();
@@ -209,7 +312,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
   $('resetBtn').onclick=()=>{$('confirm').hidden=false;};
   $('noReset').onclick=()=>{$('confirm').hidden=true;};
-  $('yesReset').onclick=()=>{box.value='';state.text='';save();updateTotals();$('confirm').hidden=true;};
+  $('yesReset').onclick=()=>{box.value='';state.text='';state.rems={};save();updateTotals();renderRems();$('confirm').hidden=true;};
 
   $('copyBtn').onclick=async()=>{
     const btn=$('copyBtn');
@@ -235,6 +338,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   };
   applyTheme();
 
+  showPriceState();
+  renderRems();
   updateTotals();
 })();
 </script>
